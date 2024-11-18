@@ -34,7 +34,7 @@ def make_linked_items(cur_item, list_items):
 
     for line in items:
         words = [(pleco_make_link(word) + " " + pinyinget(word)) for word in line.split(' ')]
-        contents += f"{PC_RIGHT_TRIANGLE} {" ".join(words)}。\n"
+        contents += f"{PC_RIGHT_TRIANGLE} {" ".join(words)}\n"
     
     return contents
 
