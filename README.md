@@ -17,4 +17,4 @@ Chinese language
 
 - [hit_corpus](https://github.com/Baichenjia/Graduation-design/tree/master/emotion/mysite/Label_extract/hit_corpus)
 
-- [guotong1988/chinese_dictionary/)
+- [guotong1988/chinese_dictionary/](https://github.com/guotong1988/chinese_dictionary/)
