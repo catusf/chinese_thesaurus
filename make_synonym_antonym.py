@@ -1,7 +1,7 @@
 import json
 from collections import defaultdict
 from pinyin import get as pinyinget
-from hanzipy.dictionary import HanziDictionary
+# from hanzipy.dictionary import HanziDictionary
 
 # searcher = HanziDictionary()
 # result = searcher.definition_lookup("好", script_type="simplified")
@@ -10,7 +10,7 @@ from hanzipy.dictionary import HanziDictionary
 # print(result)
 
 # Initialize the synonym dictionary with defaultdict
-thesaurus_dict = defaultdict(lambda: {"SynonymSet": [], "RelatedSet": [], "IndependentSet": [], "AntonymSet": [], "NegateSet": []})
+thesaurus_dict = defaultdict(lambda: {"SynonymSet": [], "RelatedSet": [], "IndependentSet": [], "AntonymSet": [], "NegationSet": []})
 
 # Path to the uploaded file
 
@@ -27,10 +27,15 @@ def pleco_make_bold(text):
 def pleco_make_link(text):
     return f"{chr(0xEAB8)}{text}{chr(0xEABB)}"
 
-def make_linked_items(list_items):
+def make_linked_items(cur_item, list_items):
     contents = f"{PC_RIGHT_TRIANGLE} "
 
-    for line in list_items:
+    item_set = set(list_items)
+    item_set.discard(cur_item) # Dont repeat the headword
+
+    items = sorted(list(item_set))
+
+    for line in items:
         words = line.split(' ')
 
         for word in words:
@@ -40,7 +45,7 @@ def make_linked_items(list_items):
     return contents
 
 # Process the file line by line
-with open('dict_synonym.txt', 'r', encoding='utf-8') as file:
+with open('data/dict_synonym.txt', 'r', encoding='utf-8') as file:
     count = 0
     print(f"Reading dict_synonym.txt...")
     for line in file:        
@@ -78,11 +83,14 @@ with open('dict_synonym.txt', 'r', encoding='utf-8') as file:
         # Populate the dictionary
         for word in word_list:
             thesaurus_dict[word][thesaurus_type].append(words)
+
+            if word == "金丝燕":
+                pass
     
     print(f"Found {count} items.")
 
 # Process the file line by line
-with open('dict_antonym.txt', 'r', encoding='utf-8') as file:
+with open('data/dict_antonym.txt', 'r', encoding='utf-8') as file:
     count = 0
     print(f"Reading dict_antonym.txt...")
     for line in file:
@@ -106,14 +114,14 @@ with open('dict_antonym.txt', 'r', encoding='utf-8') as file:
         thesaurus_dict[word2]["AntonymSet"].append(word1)
     print(f"Found {count} items.")
 
-ignore_negates = set(['不', '没'])
+ignore_negations = set(['不', '没'])
 
 # Process the file line by line
-with open('dict_negative.txt', 'r', encoding='utf-8') as file:
+with open('data/dict_negative.txt', 'r', encoding='utf-8') as file:
     count = 0
     print(f"Reading dict_negative.txt...")
 
-    negates = []
+    negations = []
     for line in file:
         line = line.strip()
         if not line:
@@ -131,20 +139,20 @@ with open('dict_negative.txt', 'r', encoding='utf-8') as file:
             print(f"Invalid format line: {line}")
             continue
             
-        negates.append(word)
+        negations.append(word)
 
     print(f"Found {count} items.")
 
     for word in thesaurus_dict:
-        if word in ignore_negates: # Skips too frequently used ones
+        if word in ignore_negations: # Skips too frequently used ones
             continue
 
-        for negate in negates:
-            if word in negate:
-                thesaurus_dict[word]["NegateSet"].append(negate)
+        for negation in negations:
+            if word in negation:
+                thesaurus_dict[word]["NegationSet"].append(negation)
 
 # Serialize to JSON format
-output_path = 'updated_synonym_dict.json'
+output_path = 'data/thesaurus_dict.json'
 
 with open(output_path, 'w', encoding='utf-8') as json_file:
     json.dump(thesaurus_dict, json_file, ensure_ascii=False, indent=4)
@@ -172,14 +180,21 @@ print(f"Dict items count: {len(thesaurus_dict)}")
 
 print(f"Total number of items across all words: {total_items_count}")
 
-print(f"Updated synonym dictionary saved to: {output_path}")
-
-with open('SND-Pleco.txt', 'w', encoding='utf-8') as snd_file:
+with open('data/SND-Pleco.txt', 'w', encoding='utf-8') as snd_file:
     count = 0
     print(f"Generating Pleco dict...")
     contents = ''
 
     for item in thesaurus_dict:
+        antonyms = set(thesaurus_dict[item]["AntonymSet"])
+        synonyms = set(thesaurus_dict[item]["SynonymSet"])
+        negations = set(thesaurus_dict[item]["NegationSet"])
+
+        if not(len(antonyms) + len(synonyms) + len(negations)):
+            print(f"{item} does not have any thesaurus items.")
+
+            continue
+
         count += 1
 
         if count > MAX_ITEMS:
@@ -191,19 +206,19 @@ with open('SND-Pleco.txt', 'w', encoding='utf-8') as snd_file:
         if list_items:
             contents += f"{pleco_make_bold('ANTONYM')}\n"
 
-            contents += make_linked_items(list_items)
+            contents += make_linked_items(item, list_items)
 
         list_items = thesaurus_dict[item]["SynonymSet"]
         if list_items:
             contents += f"{pleco_make_bold('SYNONYM')}\n"
             
-            contents += make_linked_items(list_items)
+            contents += make_linked_items(item, list_items)
 
-        list_items = thesaurus_dict[item]["NegateSet"]
+        list_items = thesaurus_dict[item]["NegationSet"]
         if list_items:
-            contents += f"{pleco_make_bold('NEGATE')}\n"
+            contents += f"{pleco_make_bold('NEGATION')}\n"
 
-            contents += make_linked_items(list_items)
+            contents += make_linked_items(item, list_items)
 
         contents = contents.replace('\n', PC_NEWLINE)
 
