@@ -1,5 +1,20 @@
-# chinese_dictionary
-[![LICENSE](https://img.shields.io/badge/license-Anti%20996-blue.svg)](https://github.com/996icu/996.ICU/blob/master/LICENSE)
-[![996.icu](https://img.shields.io/badge/link-996.icu-red.svg)](https://996.icu)
+# chinese_thesaurus
+Data and Pleco dictionary for
 
-同义词表，反义词表，否定词表
+Chinese language 
+
+- Synonym list
+- Antonym list
+- Negation list
+
+中文
+
+- 同义词表
+- 反义词表
+- 否定词表
+
+## References
+
+- [hit_corpus](https://github.com/Baichenjia/Graduation-design/tree/master/emotion/mysite/Label_extract/hit_corpus)
+
+- [guotong1988/chinese_dictionary/)
