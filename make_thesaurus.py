@@ -1,23 +1,16 @@
 import json
+import argparse
 from collections import defaultdict
 from pinyin import get as pinyinget
-# from hanzipy.dictionary import HanziDictionary
 
-# searcher = HanziDictionary()
-# result = searcher.definition_lookup("好", script_type="simplified")
-# print(result)
-
-# Initialize the synonym dictionary with defaultdict
-thesaurus_dict = defaultdict(lambda: {"SynonymSet": [], "RelatedSet": [], "IndependentSet": [], "AntonymSet": [], "NegationSet": []})
-
-# Path to the uploaded file
-
-MAX_ITEMS = 100000 # For debug purposes
-
-BIG_ITEMS = 50 # For debug purposes
+# Constants
+MAX_ITEMS = 100000  # For debug purposes
+BIG_ITEMS = 50  # For debug purposes
 
 PC_NEWLINE = chr(0xEAB1)
 PC_RIGHT_TRIANGLE = "»"  # ▸
+PC_SEPERATOR_1 = " "
+PC_SEPERATOR_2 = "、"
 
 def pleco_make_bold(text):
     return f"{chr(0xEAB2)}{text}{chr(0xEAB3)}"
@@ -25,196 +18,149 @@ def pleco_make_bold(text):
 def pleco_make_link(text):
     return f"{chr(0xEAB8)}{text}{chr(0xEABB)}"
 
-def make_linked_items(cur_item, list_items):
-    items = sorted(list(set(list_items))) # Removes duplicated lines 
+def make_linked_items(cur_item, list_items, include_pinyin=True):
+    items = sorted(list(set(list_items)))  # Removes duplicated lines
     contents = ""
 
     for line in items:
         tokens = set(line.split(' '))
         tokens.discard(cur_item)
-        
-        words = [(pleco_make_link(word) + " " + pinyinget(word)) for word in sorted(list(tokens))]
-        contents += f"{PC_RIGHT_TRIANGLE} {" ".join(words)}\n"
-    
+
+        words = [
+            pleco_make_link(word) + (" " + pinyinget(word) if include_pinyin else "")
+            for word in sorted(list(tokens))
+        ]
+        sep = PC_SEPERATOR_1 if include_pinyin else PC_SEPERATOR_2
+        # print(f"Sep: {sep}")
+        contents += f"{PC_RIGHT_TRIANGLE} {sep.join(words)}\n"
+
     return contents
 
-# Process the file line by line
-with open('data/dict_synonym.txt', 'r', encoding='utf-8') as file:
-    count = 0
-    print(f"Reading dict_synonym.txt...")
-    for line in file:        
-        # Remove any trailing newline or spaces
-        line = line.strip()
-        if not line:
-            continue
-        
-        if count > MAX_ITEMS:
-            break
-        
-        count+=1
+def main():
+    # Initialize argument parser
+    parser = argparse.ArgumentParser(description="Process a thesaurus dictionary and generate output.")
+    parser.add_argument("--no-pinyin", action="store_true", help="Exclude Pinyin from the generated output.")
+    args = parser.parse_args()
 
-        # Split the line into Category and Words
-        try:
-            category, words = line.split(' ', 1)
-        except ValueError:
-            print(f"Invalid format line: {line}")
-            continue
+    # Initialize the synonym dictionary with defaultdict
+    thesaurus_dict = defaultdict(lambda: {
+        "SynonymSet": [], "RelatedSet": [], "IndependentSet": [],
+        "AntonymSet": [], "NegationSet": []
+    })
 
-        # Determine the type from the last character of Category
-        type_char = category[-1]
-        thesaurus_type = (
-            "SynonymSet" if type_char == '=' else
-            "RelatedSet" if type_char == '#' else
-            "IndependentSet" if type_char == '@' else None
-        )
-        if not thesaurus_type:
-            print(f"Incorrect line: {line}")
-            continue
+    # Process thesaurus files
+    with open('data/dict_synonym.txt', 'r', encoding='utf-8') as file:
+        count = 0
+        print(f"Reading dict_synonym.txt...")
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue
+            if count > MAX_ITEMS:
+                break
+            count += 1
+            try:
+                category, words = line.split(' ', 1)
+            except ValueError:
+                print(f"Invalid format line: {line}")
+                continue
 
-        # Split the Words into individual words
-        word_list = words.split()
+            type_char = category[-1]
+            thesaurus_type = {
+                '=': "SynonymSet",
+                '#': "RelatedSet",
+                '@': "IndependentSet"
+            }.get(type_char, None)
+            if not thesaurus_type:
+                print(f"Incorrect line: {line}")
+                continue
 
-        # Populate the dictionary
-        for word in word_list:
-            thesaurus_dict[word][thesaurus_type].append(words)
+            word_list = words.split()
+            for word in word_list:
+                thesaurus_dict[word][thesaurus_type].append(words)
 
-            if word == "金丝燕":
-                pass
-    
-    print(f"Found {count} items.")
+    with open('data/dict_antonym.txt', 'r', encoding='utf-8') as file:
+        count = 0
+        print(f"Reading dict_antonym.txt...")
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue
+            count += 1
+            if count > MAX_ITEMS:
+                break
+            try:
+                word1, word2 = line.split('-', 1)
+            except ValueError:
+                print(f"Invalid format line: {line}")
+                continue
 
-# Process the file line by line
-with open('data/dict_antonym.txt', 'r', encoding='utf-8') as file:
-    count = 0
-    print(f"Reading dict_antonym.txt...")
-    for line in file:
-        line = line.strip()
-        if not line:
-            continue
-        
-        count+=1
+            thesaurus_dict[word1]["AntonymSet"].append(word2)
+            thesaurus_dict[word2]["AntonymSet"].append(word1)
 
-        if count > MAX_ITEMS:
-            break
-        
-        # Split the line into Category and Words
-        try:
-            word1, word2 = line.split('-', 1)
-        except ValueError:
-            print(f"Invalid format line: {line}")
-            continue
-            
-        thesaurus_dict[word1]["AntonymSet"].append(word2)
-        thesaurus_dict[word2]["AntonymSet"].append(word1)
-    print(f"Found {count} items.")
+    ignore_negations = {'不', '没'}
+    with open('data/dict_negative.txt', 'r', encoding='utf-8') as file:
+        count = 0
+        print(f"Reading dict_negative.txt...")
+        negations = []
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue
+            count += 1
+            if count > MAX_ITEMS:
+                break
+            try:
+                word, _ = line.split('\t', 1)
+            except ValueError:
+                print(f"Invalid format line: {line}")
+                continue
+            negations.append(word)
 
-ignore_negations = set(['不', '没'])
+        for word in thesaurus_dict:
+            if word in ignore_negations:
+                continue
+            for negation in negations:
+                if word in negation:
+                    thesaurus_dict[word]["NegationSet"].append(negation)
 
-# Process the file line by line
-with open('data/dict_negative.txt', 'r', encoding='utf-8') as file:
-    count = 0
-    print(f"Reading dict_negative.txt...")
+    # Write JSON output
+    with open('data/thesaurus_dict.json', 'w', encoding='utf-8') as json_file:
+        json.dump(thesaurus_dict, json_file, ensure_ascii=False, indent=4)
 
-    negations = []
-    for line in file:
-        line = line.strip()
-        if not line:
-            continue
+    pleco_file = "data/SND-Pleco.txt"
 
-        count += 1
+    if args.no_pinyin:
+        pleco_file = pleco_file.replace(".txt", "-no_pinyin.txt")
 
-        if count > MAX_ITEMS:
-            break
-        
-        # Split the line into Category and Words
-        try:
-            word, _ = line.split('\t', 1)
-        except ValueError:
-            print(f"Invalid format line: {line}")
-            continue
-            
-        negations.append(word)
+    # Generate Pleco dictionary
+    with open(pleco_file, 'w', encoding='utf-8') as snd_file:
+        count = 0
+        print(f"Generating Pleco dict...")
+        for item in thesaurus_dict:
+            antonyms = set(thesaurus_dict[item]["AntonymSet"])
+            synonyms = set(thesaurus_dict[item]["SynonymSet"])
+            negations = set(thesaurus_dict[item]["NegationSet"])
 
-    print(f"Found {count} items.")
+            if not (len(antonyms) + len(synonyms) + len(negations)):
+                continue
 
-    for word in thesaurus_dict:
-        if word in ignore_negations: # Skips too frequently used ones
-            continue
+            count += 1
+            if count > MAX_ITEMS:
+                break
 
-        for negation in negations:
-            if word in negation:
-                thesaurus_dict[word]["NegationSet"].append(negation)
+            contents = f'{item}\t{pinyinget(item)}\t'
 
-# Serialize to JSON format
+            for thesaurus_type, label in [("AntonymSet", "ANTONYM"), ("SynonymSet", "SYNONYM"), ("NegationSet", "NEGATION")]:
+                list_items = thesaurus_dict[item][thesaurus_type]
+                if list_items:
+                    contents += f"{pleco_make_bold(label)}\n"
+                    contents += make_linked_items(item, list_items, include_pinyin=not args.no_pinyin)
 
-with open('data/thesaurus_dict.json', 'w', encoding='utf-8') as json_file:
-    json.dump(thesaurus_dict, json_file, ensure_ascii=False, indent=4)
+            contents = contents.replace('\n', PC_NEWLINE)
+            snd_file.write(f'{contents}\n')
 
-# Calculate and print the total number of items for all words
-total_items_count = 0
+        print(f"Created {count} items.")
 
-SUB_KEYS = thesaurus_dict['好'].keys()
-big_items = 0
-
-with open(f'data/big_items-{BIG_ITEMS}.txt', 'w', encoding='utf-8') as big_file:
-    for item in thesaurus_dict:
-        total_items_count += len(thesaurus_dict[item].values())
-
-        for sub in SUB_KEYS:
-            for words in thesaurus_dict[item][sub]:
-                if len(words) > BIG_ITEMS:
-                    # print(f"{item} > {sub}")
-                    big_file.write(f"{item} > {sub} > {words}\n")
-                    big_items+=1
-
-print(f"Big items: {big_items}")
-
-print(f"Dict items count: {len(thesaurus_dict)}")
-
-print(f"Total number of items across all words: {total_items_count}")
-
-with open('data/SND-Pleco.txt', 'w', encoding='utf-8') as snd_file:
-    count = 0
-    print(f"Generating Pleco dict...")
-    contents = ''
-
-    for item in thesaurus_dict:
-        antonyms = set(thesaurus_dict[item]["AntonymSet"])
-        synonyms = set(thesaurus_dict[item]["SynonymSet"])
-        negations = set(thesaurus_dict[item]["NegationSet"])
-
-        if not(len(antonyms) + len(synonyms) + len(negations)):
-            # print(f"{item} does not have any thesaurus items.")
-
-            continue
-
-        count += 1
-
-        if count > MAX_ITEMS:
-            break
-
-        contents = f'{item}\t{pinyinget(item)}\t'
-
-        list_items = thesaurus_dict[item]["AntonymSet"]
-        if list_items:
-            contents += f"{pleco_make_bold('ANTONYM')}\n"
-
-            contents += make_linked_items(item, list_items)
-
-        list_items = thesaurus_dict[item]["SynonymSet"]
-        if list_items:
-            contents += f"{pleco_make_bold('SYNONYM')}\n"
-            
-            contents += make_linked_items(item, list_items)
-
-        list_items = thesaurus_dict[item]["NegationSet"]
-        if list_items:
-            contents += f"{pleco_make_bold('NEGATION')}\n"
-
-            contents += make_linked_items(item, list_items)
-
-        contents = contents.replace('\n', PC_NEWLINE)
-
-        snd_file.write(f'{contents}\n')
-
-    print(f"Created {count} items.")
+if __name__ == "__main__":
+    main()
