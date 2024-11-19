@@ -4,14 +4,27 @@ from bs4 import BeautifulSoup
 import time
 from collections import deque
 
-BASE_URL = "https://jyc.kxue.com/m/list/"
+BASE_URL = "https://jyc.kxue.com/jinyici/"
 START_URL = "https://jyc.kxue.com/m/"
 OUTPUT_DIR = "scraped_pages"
 
 visited_links = set()  # To track visited links and avoid duplicates
 
+downloaded_links = set() # Tracks downloaded files 
 
+enqueued_links = set()  # Links added to queue
+
+queue = deque() # deque([(start_url, 0)])  # Queue of (url, depth)
+
+def normalize_url(url):
+    if not url.startswith('http'):  # Handle relative URLs
+        print(f'New url {url}')    
+        return BASE_URL + url.lstrip('/')
+    else:
+        return url
+        
 def initialize_visited_links():
+    global visited_links, downloaded_links, enqueued_links, queue
     """Initialize visited links from existing downloaded files."""
     if not os.path.exists(OUTPUT_DIR):
         return
@@ -20,8 +33,10 @@ def initialize_visited_links():
         if filename.endswith(".html"):
             link = f"{BASE_URL}{filename}"
             visited_links.add(link)
+            downloaded_links.add(link)
             print(f"Added {link} to visited links from existing files.")
 
+    pass
 
 def fetch_page(url):
     """Fetches the content of a webpage, handling GBK encoding."""
@@ -57,6 +72,16 @@ def read_saved_file(filename):
         print(f"Error reading {filename}: {e}")
         return None
 
+def scan_web_content(html, depth):
+    global visited_links, downloaded_links, enqueued_links, queue
+
+    soup = BeautifulSoup(html, 'html.parser')
+    for link in soup.find_all('a', href=True):
+        href = normalize_url(link['href'])
+
+        if all([href.startswith(START_URL), href not in visited_links, href not in enqueued_links]):
+            queue.append((href, depth + 1))  # Enqueue the link
+            enqueued_links.add(href)
 
 def process_existing_files():
     """Processes already downloaded files for further scraping."""
@@ -65,30 +90,19 @@ def process_existing_files():
 
     for filename in os.listdir(OUTPUT_DIR):
         if filename.endswith(".html"):
-            file_content = read_saved_file(filename)
-            if filename.find('a.html') >= 0:
-                print(file_content.find('ao.html'))
-                pass
+            html = read_saved_file(filename)
             
-            if not file_content:
+            if not html:
                 continue
 
-            soup = BeautifulSoup(file_content, 'html.parser')
-            for link in soup.find_all('a', href=True):
-                href = link['href']
-                if not href.startwith('http'):  # Handle relative URLs
-                    href = BASE_URL + href
-                # if href.startswith('/'):  # Handle relative URLs
-                #     href = BASE_URL + href.lstrip('/')
-                if href.startswith(START_URL) and href not in visited_links:
-                    print(f"Found new link {href} from existing file {filename}")
-                    visited_links.add(href)
-
+            scan_web_content(html, 1)
 
 def bfs_scrape(start_url, max_depth=5):
     """Performs breadth-first scraping starting from start_url."""
-    queue = deque([(start_url, 0)])  # Queue of (url, depth)
+    global visited_links, downloaded_links, enqueued_links, queue
 
+    queue.append((start_url, 0))  # Enqueue the link
+    
     while queue:
         url, depth = queue.popleft()
 
@@ -101,43 +115,32 @@ def bfs_scrape(start_url, max_depth=5):
             continue
 
         print(f"Processing {url} at depth {depth}")
-        visited_links.add(url)
+
+        assert(url not in downloaded_links)
 
         html = fetch_page(url)
         if not html:
             continue
-        if url.find('/a.html') >=0:
-            pass
-        if url.find('/ao.html') >=0:
-            pass
 
         # Save the page if it's an HTML page
         if url.endswith(".html"):
             filename = url.split("/")[-1]
             save_html(filename, html)
 
-        # Parse and enqueue all relevant links
-        soup = BeautifulSoup(html, 'html.parser')
-        for link in soup.find_all('a', href=True):
-            href = link['href']
+        visited_links.add(url)
 
-            if not href.startswith('http'):  # Handle relative URLs
-                href = BASE_URL + href.lstrip('/')
-                print(f'New url {href}')
-            if href.find('/ao.html') >= 0:
-                pass
-            if href.startswith(START_URL) and href not in visited_links:
-                queue.append((href, depth + 1))  # Enqueue the link
+        # Parse and enqueue all relevant links
+        scan_web_content(html)
 
     print("No more items in Queue")
 
 def main():
     """Main function to start the scraping process."""
     print("Initializing visited links from existing files.")
-    # initialize_visited_links()
+    initialize_visited_links()
 
     print("Processing existing files for additional links.")
-    # process_existing_files()
+    process_existing_files()
 
     print(f"Starting breadth-first scraping from {START_URL}")
     bfs_scrape(START_URL)

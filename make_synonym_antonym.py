@@ -146,9 +146,8 @@ with open('data/dict_negative.txt', 'r', encoding='utf-8') as file:
                 thesaurus_dict[word]["NegationSet"].append(negation)
 
 # Serialize to JSON format
-output_path = 'data/thesaurus_dict.json'
 
-with open(output_path, 'w', encoding='utf-8') as json_file:
+with open('data/thesaurus_dict.json', 'w', encoding='utf-8') as json_file:
     json.dump(thesaurus_dict, json_file, ensure_ascii=False, indent=4)
 
 # Calculate and print the total number of items for all words
@@ -157,7 +156,7 @@ total_items_count = 0
 SUB_KEYS = thesaurus_dict['好'].keys()
 big_items = 0
 
-with open(f'big_items-{BIG_ITEMS}.txt', 'w', encoding='utf-8') as big_file:
+with open(f'data/big_items-{BIG_ITEMS}.txt', 'w', encoding='utf-8') as big_file:
     for item in thesaurus_dict:
         total_items_count += len(thesaurus_dict[item].values())
 
