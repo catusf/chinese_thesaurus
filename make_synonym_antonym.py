@@ -26,14 +26,14 @@ def pleco_make_link(text):
     return f"{chr(0xEAB8)}{text}{chr(0xEABB)}"
 
 def make_linked_items(cur_item, list_items):
-    item_set = set(list_items)
-    item_set.discard(cur_item) # Dont repeat the headword
-
-    items = sorted(list(item_set))
+    items = sorted(list(set(list_items))) # Removes duplicated lines 
     contents = ""
 
     for line in items:
-        words = [(pleco_make_link(word) + " " + pinyinget(word)) for word in line.split(' ')]
+        tokens = set(line.split(' '))
+        tokens.discard(cur_item)
+        
+        words = [(pleco_make_link(word) + " " + pinyinget(word)) for word in sorted(list(tokens))]
         contents += f"{PC_RIGHT_TRIANGLE} {" ".join(words)}\n"
     
     return contents
