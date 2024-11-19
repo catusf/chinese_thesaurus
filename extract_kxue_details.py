@@ -3,6 +3,9 @@ import os
 import json
 from bs4 import BeautifulSoup
 
+SYNONYM_TITLE= "的近义词"
+LEN_SYNONYM_TITLE = len(SYNONYM_TITLE)
+
 def parse_explanation_with_pinyin(headword, explanation):
 
     return {
@@ -78,10 +81,14 @@ def parse_html_with_fixed_pinyin(file_path):
     # Continue with your processing logic...
 
     result = {
+        "单词": "",
         "近义词": [],
         "反义词": [],
         "词典解释": []
     }
+    
+    headword = soup.find('div', class_='all_title').get_text(strip=True)[:-LEN_SYNONYM_TITLE]
+    result["单词"] = headword
 
     for section in soup.find_all('div', class_='jsitem'):
         title = section.find('div', class_='title').get_text(strip=True)
@@ -119,8 +126,8 @@ def process_folder(folder_path, output_file):
 
     # Save the results to a JSON file
 
-# folder_path = r"data/details"  # Replace with the path to your folder
-folder_path = r"C:\Sites\KXue\jyc.kxue.com\m\jinyici"  # Replace with the path to your folder
+folder_path = r"data/details"  # Replace with the path to your folder
+# folder_path = r"C:\Sites\KXue\jyc.kxue.com\m\jinyici"  # Replace with the path to your folder
 output_file = "output_details.json"  # Replace with your desired output file name
 process_folder(folder_path, output_file)
 

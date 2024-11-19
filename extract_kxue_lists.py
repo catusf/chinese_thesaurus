@@ -24,12 +24,13 @@ def extract_data_from_html(file_path):
     return data
 
 def process_folder(folder_path, output_file):
-    all_data = {}
+    all_data = []
     for file_name in os.listdir(folder_path):
+        print(f"Processing {file_name}...")
         if file_name.endswith(".html"):  # Process only HTML files
             file_path = os.path.join(folder_path, file_name)
             extracted_data = extract_data_from_html(file_path)
-            all_data[file_name] = extracted_data
+            all_data.extend(extracted_data)
 
     # Save all extracted data to a JSON file
     with open(output_file, "w", encoding="utf-8") as json_file:
