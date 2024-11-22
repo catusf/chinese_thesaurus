@@ -1,21 +1,91 @@
 import json
 import argparse
 from collections import defaultdict
-from pinyin import get as pinyinget
+#from pinyin import get as pinyinget
+from pinyin_jyutping_sentence import pinyin as pinyinget
 import re
+import time
+import io
 
 from dragonmapper.transcriptions import numbered_to_accented
 
 from pycccedict.cccedict import CcCedict
 
 from chin_dict.chindict import ChinDict
-cd = ChinDict()
+import json
+import json
+from chin_dict.chindict import ChinDict
 
-lookups = {}
+
+class ChineseDictionary:
+    def __init__(self, lookups_file="lookups.json"):
+        """
+        Initialize the ChineseDictionary class with an optional path to the lookups file.
+        """
+        self.cd = ChinDict()
+        self.lookups_file = lookups_file
+        self.lookups = self.load_lookups()
+
+    @staticmethod
+    def wordresult_to_dic(wordresult):
+        """
+        Convert word lookup results to a dictionary format.
+        """
+        results = []
+        for item in wordresult:
+            results.append({
+                "meaning": item.meaning,
+                "pinyin": item.pinyin,
+                "simplified": item.simplified,
+                "traditional": item.traditional
+            })
+        return results
+
+    def load_lookups(self):
+        """
+        Load lookups from a JSON file. Return an empty dictionary if the file doesn't exist.
+        """
+        try:
+            with open(self.lookups_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return {}
+
+    def save_lookups(self):
+        """
+        Save the current lookups dictionary to a JSON file.
+        """
+        with io.open(self.lookups_file, "w", encoding="utf-8") as f:
+            json.dump(self.lookups, f, ensure_ascii=False, indent=4)
+
+    def lookup(self, word):
+        """
+        Look up a word and return its definitions. Cache the results in the lookups dictionary.
+        """
+        definitions = None
+        try:
+            if word in self.lookups:
+                print(f"Using cached result for '{word}'")
+                return self.lookups[word]
+            else:
+                print(f"Performing new search for '{word}'")
+                definitions = self.wordresult_to_dic(self.cd.lookup_word(word))
+        except Exception as e:
+            print(f"Error looking up word '{word}': {e}")
+
+        self.lookups[word] = definitions
+        return definitions
+
+    def __del__(self):
+        """
+        Ensure lookups are saved when the object is destroyed.
+        """
+        self.save_lookups()
+
+
 
 cccedict = CcCedict()
 # Constants
-MAX_ITEMS = 5000  # For debug purposes
 BIG_ITEMS = 50  # For debug purposes
 
 PC_NEWLINE = chr(0xEAB1)
@@ -24,9 +94,29 @@ PC_SEPARATOR_1 = " "
 PC_SEPARATOR_2 = "、"
 PC_MIDDLE_DOT = "·"
 
+def remove_chinese_with_pipe(text):
+    """
+    Remove the Traditional Chinese characters before the '|' and the '|' itself in the input string.
+    
+    Args:
+        text (str): The input text to be cleaned.
+        
+    Returns:
+        str: The cleaned text.
+    """
+    return re.sub(r'[\u4e00-\u9fff]+\|', '', text)
 
-import time
-
+def convert_to_mark_pinyin(text):
+    # Define the regex as a constant
+    BRACKETS_REGEX = r'(\[[^\]]+\])'
+    
+    # Function to convert matched text to uppercase
+    def replace_with_uppercase(match):
+        # return match.group(1)
+        return f" {numbered_to_accented(match.group(1))[1:-1]}"
+        
+    return re.sub(BRACKETS_REGEX, replace_with_uppercase, text)
+    
 class Timer:
     """
     A Timer class to measure elapsed time with start, stop, and display functionalities.
@@ -75,15 +165,6 @@ class Timer:
 def remove_spaces(text):
     return text.replace(" ", "")
 
-def convert_to_mark_pinyin(text):
-    # Define the regex as a constant
-    BRACKETS_REGEX = r'\[([^\]]+)\]'
-    
-    # Function to convert matched text to uppercase
-    def replace_with_uppercase(match):
-        return f"[{numbered_to_accented(match.group(1))}]"
-        
-    return re.sub(BRACKETS_REGEX, replace_with_uppercase, text)
 
 def circled_number(n):
     """ Returns circled numbers, maxes out at 35
@@ -94,6 +175,9 @@ def circled_number(n):
         return chr(12881 + n - 20)  # Unicode offset for Ⓐ-Ⓙ and beyond
     else:
         return str(n)  # Fallback to normal numbers
+
+def pleco_make_dark_gray(text):  # Light Slate Gray
+    return f"{text}"
     
 def pleco_make_italic(text):
     return f"{chr(0xEAB4)}{text}{chr(0xEAB5)}"
@@ -105,16 +189,14 @@ def pleco_make_link(text):
     return f"{chr(0xEAB8)}{text}{chr(0xEABB)}"
 
 DEF_SEPERATOR = "/"
-def get_def_contens(item, has_marker=True):
-    definitions = None
-    try:
-        if item in lookups:
-            definitions = lookups[item]
-        else: 
-            definitions = cd.lookup_word(item)
-            lookups[item] = definitions
-    except Exception as e:
-        # print(f"Error looking up word '{item}': {e}")
+
+dictionary = ChineseDictionary()
+
+
+def get_def_contents(item, is_headword, has_marker=False):
+    definitions = dictionary.lookup(item)
+
+    if not definitions:
         return "\n"
 
     contents = ""
@@ -122,11 +204,13 @@ def get_def_contens(item, has_marker=True):
         contents += f"{pleco_make_bold("DEFINITION")}\n"
 
     for definition in definitions:
-        dict_pinyin = remove_spaces(numbered_to_accented(definition.pinyin))
-        # if remove_spaces(dict_pinyin) != remove_spaces(pinyin):
-        contents += f"{pleco_make_italic(dict_pinyin)} "
+        if not is_headword:
+            dict_pinyin = numbered_to_accented(definition["pinyin"]) # remove_spaces(numbered_to_accented(definition.pinyin))
 
-        contents += f"{"; ".join([convert_to_mark_pinyin(item.strip()) for item in definition.meaning])}{DEF_SEPERATOR}"
+            # if remove_spaces(dict_pinyin) != remove_spaces(pinyin):
+            contents += f"{pleco_make_italic(dict_pinyin)} "
+
+        contents += f"{"; ".join([remove_chinese_with_pipe(convert_to_mark_pinyin(item.strip())) for item in definition["meaning"]])}{DEF_SEPERATOR}"
     
     if contents[-1] == DEF_SEPERATOR:
         contents = contents[:-1]
@@ -135,7 +219,7 @@ def get_def_contens(item, has_marker=True):
 
     return contents
 
-def make_linked_items(cur_item, list_items, include_pinyin=True, add_definitions=False):
+def make_linked_items(cur_item, list_items, include_pinyin, add_definitions):
     items = sorted(list(set(list_items)))  # Removes duplicated lines
     contents = ""
 
@@ -147,7 +231,7 @@ def make_linked_items(cur_item, list_items, include_pinyin=True, add_definitions
 
         for item in tokens:
             if add_definitions:
-                word = pleco_make_link(item) + " " + get_def_contens(item, has_marker=False)
+                word = pleco_make_link(item) + " " + get_def_contents(item, is_headword=False, has_marker=False)
 
             else:
                 word = pleco_make_link(item) + (" " + pinyinget(item) if include_pinyin else "")
@@ -163,9 +247,16 @@ def make_linked_items(cur_item, list_items, include_pinyin=True, add_definitions
 def main():
     # Initialize argument parser
     parser = argparse.ArgumentParser(description="Process a thesaurus dictionary and generate output.")
-    parser.add_argument("--no-pinyin", default=False, action="store_true", help="Exclude Pinyin from the generated output.")
-    parser.add_argument("--add-definition", default=True, action="store_true", help="Exclude Pinyin from the generated output.")
+    # parser.add_argument("--no-pinyin", default=False, action="store_true", help="Exclude Pinyin from the generated output.")
+    # parser.add_argument("--add-definition", default=True, action="store_true", help="Exclude Pinyin from the generated output.")
+    parser.add_argument("--dict-size", choices=['small', 'mid', 'big'], default="small", required=False,
+                        help="Dictionary size: 'small' for Chinese thesaurus only, 'mid' adds Pinyin, 'big' adds definitions for words.")
+    parser.add_argument("--num-items", type=int, default=1000000, required=False,
+                        help="Maximum number of items to process (default: MAX_ITEMS).")
     args = parser.parse_args()
+
+    # Use the --num-items argument to limit processing
+    max_items = args.num_items
 
     # Initialize the synonym dictionary with defaultdict
     thesaurus_dict = defaultdict(lambda: {
@@ -181,7 +272,7 @@ def main():
             line = line.strip()
             if not line:
                 continue
-            if count > MAX_ITEMS:
+            if count > max_items:
                 break
             count += 1
             try:
@@ -212,7 +303,7 @@ def main():
             if not line:
                 continue
             count += 1
-            if count > MAX_ITEMS:
+            if count > max_items:
                 break
             try:
                 word1, word2 = line.split('-', 1)
@@ -233,7 +324,7 @@ def main():
             if not line:
                 continue
             count += 1
-            if count > MAX_ITEMS:
+            if count > max_items:
                 break
             try:
                 word, _ = line.split('\t', 1)
@@ -253,10 +344,9 @@ def main():
     with open('data/thesaurus_dict.json', 'w', encoding='utf-8') as json_file:
         json.dump(thesaurus_dict, json_file, ensure_ascii=False, indent=4)
 
-    pleco_file = "data/SND-Pleco.txt"
+    pleco_file = "data/ChineseThesaurus-Pleco.txt"
 
-    if args.no_pinyin:
-        pleco_file = pleco_file.replace(".txt", "-no_pinyin.txt")
+    pleco_file = pleco_file.replace(".txt", f"-{args.dict_size}.txt")
 
     # Generate Pleco dictionary
     with open(pleco_file, 'w', encoding='utf-8') as snd_file:
@@ -271,39 +361,27 @@ def main():
                 continue
 
             count += 1
-            if count > MAX_ITEMS:
+            if count > max_items:
                 break
-            definitions = None
-            if args.add_definition:
-                try:
-                    definitions = cd.lookup_word(item)
-                except:
-                    # print(f"No results for word: '{item}")
-                    pass
 
             pinyin = pinyinget(item)
-            contents = f'{item}\t{pinyin}\t'
+            contents = f'{item}\t\t'
 
-            if definitions:
-                contents += f"{pleco_make_bold("DEFINITION")}\n"
-
-                for definition in definitions:
-                    dict_pinyin = remove_spaces(numbered_to_accented(definition.pinyin))
-                    if remove_spaces(dict_pinyin) != remove_spaces(pinyin):
-                         contents += f"{pleco_make_italic(dict_pinyin)} "
-
-                    contents += f"{"; ".join(definition.meaning)}\n"
+            contents += get_def_contents(item, is_headword=True)
 
             for thesaurus_type, label in [("AntonymSet", "ANTONYM"), ("SynonymSet", "SYNONYM"), ("NegationSet", "NEGATION")]:
                 list_items = thesaurus_dict[item][thesaurus_type]
                 if list_items:
-                    contents += f"{pleco_make_bold(label)}\n"
-                    contents += make_linked_items(item, list_items, include_pinyin=not args.no_pinyin, add_definitions=args.add_definition)
+                    contents += f"{pleco_make_dark_gray(pleco_make_bold(label))}\n"
+                    contents += make_linked_items(item, list_items, include_pinyin=args.dict_size in ["mid", "big"],
+                        add_definitions=args.dict_size in ["big"])
 
             contents = contents.replace('\n', PC_NEWLINE)
             snd_file.write(f'{contents}\n')
 
-        print(f"Created {count} items.")
+        print(f"Created {count} items and saved to {pleco_file}")
+    
+    dictionary.save_lookups()
 
 if __name__ == "__main__":
     timer = Timer()

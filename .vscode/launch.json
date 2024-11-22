@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Curent File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--dict-size=small",
+                "--num-items=100"
+            ],
+            "purpose": [
+                "debug-in-terminal"
+            ],
+        }
+    ]
+}
