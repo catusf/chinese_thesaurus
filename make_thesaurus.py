@@ -229,7 +229,7 @@ def make_linked_items(cur_item, lines, dict_size):
 
         for token in tokens:
             if dict_size in ["big"]:
-                word = pleco_make_link(token) + " " + get_def_contents(token, dict_size, has_marker=False)
+                word = pleco_make_link(token) + " " + get_def_contents(token, dict_size=dict_size, has_marker=False)
 
             else:
                 word = pleco_make_link(token) + (" " + pinyinget(token) if dict_size in ["mid", "big"] else "")
@@ -366,14 +366,13 @@ def main():
             pinyin = pinyinget(item)
             contents = f'{item}\t\t'
 
-            contents += get_def_contents(item, include_pinyin=False, has_marker=False)
+            contents += get_def_contents(item, dict_size=dict_size, has_marker=False)
 
             for thesaurus_type, label in [("AntonymSet", "ANTONYM"), ("SynonymSet", "SYNONYM"), ("NegationSet", "NEGATION")]:
                 list_items = sorted(list(set(thesaurus_dict[item][thesaurus_type]))) # Remove duplicated
                 if list_items:
                     contents += f"{pleco_make_dark_gray(pleco_make_bold(label))}\n"
-                    contents += make_linked_items(item, list_items, include_pinyin=dict_size in ["mid", "big"],
-                        add_definitions=dict_size in ["big"])
+                    contents += make_linked_items(item, list_items, dict_size=dict_size)
 
             contents = contents.replace('\n', PC_NEWLINE)
             snd_file.write(f'{contents}\n')
