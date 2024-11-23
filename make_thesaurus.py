@@ -193,22 +193,19 @@ DEF_SEPERATOR = "/"
 dictionary = ChineseDictionary()
 
 
-def get_def_contents(item, is_headword, has_marker=False):
+def get_def_contents(item, dict_size, has_marker=False):
     definitions = dictionary.lookup(item)
 
     if not definitions:
-        return "\n"
+        return f"{pleco_make_italic(pinyinget(item))}\n" if dict_size in ["mid", "big"] else "\n"
 
     contents = ""
     if has_marker:
         contents += f"{pleco_make_bold("DEFINITION")}\n"
 
     for definition in definitions:
-        if not is_headword:
-            dict_pinyin = numbered_to_accented(definition["pinyin"]) # remove_spaces(numbered_to_accented(definition.pinyin))
-
-            # if remove_spaces(dict_pinyin) != remove_spaces(pinyin):
-            contents += f"{pleco_make_italic(dict_pinyin)} "
+        if dict_size in ["mid", "big"]: # Adds Pinyin
+            contents += f"{pleco_make_italic(numbered_to_accented(definition["pinyin"]).replace(" ", ""))} "
 
         contents += f"{"; ".join([remove_chinese_with_pipe(convert_to_mark_pinyin(item.strip())) for item in definition["meaning"]])}{DEF_SEPERATOR}"
     
@@ -219,28 +216,29 @@ def get_def_contents(item, is_headword, has_marker=False):
 
     return contents
 
-def make_linked_items(cur_item, list_items, include_pinyin, add_definitions):
-    items = sorted(list(set(list_items)))  # Removes duplicated lines
+def make_linked_items(cur_item, lines, dict_size):
+    # lines = sorted(list(set(list_items)))  # Removes duplicated lines
     contents = ""
 
-    for line in items:
+    for index, line in enumerate(lines, start=1):
         tokens = set(line.split(' '))
-        tokens.discard(cur_item)
+        tokens.discard(cur_item) # Dont repeat the headword
+        tokens = sorted(list(tokens))
 
         words = []
 
-        for item in tokens:
-            if add_definitions:
-                word = pleco_make_link(item) + " " + get_def_contents(item, is_headword=False, has_marker=False)
+        for token in tokens:
+            if dict_size in ["big"]:
+                word = pleco_make_link(token) + " " + get_def_contents(token, dict_size, has_marker=False)
 
             else:
-                word = pleco_make_link(item) + (" " + pinyinget(item) if include_pinyin else "")
+                word = pleco_make_link(token) + (" " + pinyinget(token) if dict_size in ["mid", "big"] else "")
 
             words.append(word)
 
-        sep = PC_SEPARATOR_1 if include_pinyin else PC_SEPARATOR_2
-        # print(f"Sep: {sep}")
-        contents += f"{PC_RIGHT_TRIANGLE} {sep.join(words)}\n"
+        sep = PC_SEPARATOR_1 if dict_size in ["mid", "big"] else PC_SEPARATOR_2
+
+        contents += f"{circled_number(index)} {sep.join(words)}\n"
 
     return contents
 
@@ -257,6 +255,7 @@ def main():
 
     # Use the --num-items argument to limit processing
     max_items = args.num_items
+    dict_size = args.dict_size
 
     # Initialize the synonym dictionary with defaultdict
     thesaurus_dict = defaultdict(lambda: {
@@ -346,7 +345,7 @@ def main():
 
     pleco_file = "data/ChineseThesaurus-Pleco.txt"
 
-    pleco_file = pleco_file.replace(".txt", f"-{args.dict_size}.txt")
+    pleco_file = pleco_file.replace(".txt", f"-{dict_size}.txt")
 
     # Generate Pleco dictionary
     with open(pleco_file, 'w', encoding='utf-8') as snd_file:
@@ -367,14 +366,14 @@ def main():
             pinyin = pinyinget(item)
             contents = f'{item}\t\t'
 
-            contents += get_def_contents(item, is_headword=True)
+            contents += get_def_contents(item, include_pinyin=False, has_marker=False)
 
             for thesaurus_type, label in [("AntonymSet", "ANTONYM"), ("SynonymSet", "SYNONYM"), ("NegationSet", "NEGATION")]:
-                list_items = thesaurus_dict[item][thesaurus_type]
+                list_items = sorted(list(set(thesaurus_dict[item][thesaurus_type]))) # Remove duplicated
                 if list_items:
                     contents += f"{pleco_make_dark_gray(pleco_make_bold(label))}\n"
-                    contents += make_linked_items(item, list_items, include_pinyin=args.dict_size in ["mid", "big"],
-                        add_definitions=args.dict_size in ["big"])
+                    contents += make_linked_items(item, list_items, include_pinyin=dict_size in ["mid", "big"],
+                        add_definitions=dict_size in ["big"])
 
             contents = contents.replace('\n', PC_NEWLINE)
             snd_file.write(f'{contents}\n')
